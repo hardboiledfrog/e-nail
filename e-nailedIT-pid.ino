@@ -52,7 +52,6 @@ void setup() {
   pinMode(relay, OUTPUT);
   digitalWrite(relay, LOW); //init relay to off
   Serial.begin(230400);
- // set PID to range between 0 and 40% window size
   myPID.SetOutputLimits(0, WindowSize);
   myPID.SetSampleTime(100); // 100msec
   windowStartTime = millis();
