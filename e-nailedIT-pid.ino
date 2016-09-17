@@ -35,8 +35,8 @@ PID myPID(&pv, &heater, &setpoint,8,0.001,2, DIRECT);
 const int relay = 7;
 int relayState;
 const int runpb = 8;
-double dabTemp = 450; // dab temp
-int WindowSize = 1250; //  max output pulse width in msec
+double dabTemp = 460; // dab temp
+double WindowSize = 1250; //  max output pulse width in msec
 unsigned long windowStartTime;
 long purgeTime = 20000; // purge time in msec
 unsigned long runTime = 130000; // heat cycle run time in msec
@@ -103,10 +103,10 @@ void loop() {
      myPID.SetMode(MANUAL);  //turn the PID off
      digitalWrite(LED_BUILTIN, LOW);
     }
-   if ((millis() - startTime) >= purgeTime) { // switch to dabTemp
+    if ((millis() - startTime) >= purgeTime) { // switch to dabTemp
      setpoint = dabTemp;
     }
-   if (!isnan(pv) && (pv > 0)) {
+    if (!isnan(pv) && (pv > 0)) {
      myPID.Compute();
      myOLED.print("*** heating ***", CENTER, 1);
      Serial.print(pv); // for logging output
