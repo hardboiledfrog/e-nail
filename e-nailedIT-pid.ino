@@ -8,6 +8,7 @@
 //
 ////////////////////////////////////////////////////
 
+#include <DirectIO.h>
 #include <PID_v1.h>
 #include <OLED_I2C.h>
 #include <SPI.h>
@@ -18,45 +19,38 @@
 const int DO1 = 4;
 const int CS1 = 5;
 const int CLK1 = 6;
-Adafruit_MAX31855 tc(CLK1, CS1, DO1);
+Adafruit_MAX31855 thermocouple(CLK1, CS1, DO1);
 
 // create OLED instance
 extern uint8_t SmallFont[];
 extern uint8_t MediumNumbers[];
 OLED  myOLED(SDA, SCL, 8);
 
-// define variables
-double setpoint, pv, heater;
+// define PID variables
+double setpoint, tc, heater;
 
 // set up variables and initial tuning parameters
-PID myPID(&pv, &heater, &setpoint,8,0.001,2, DIRECT);
+PID myPID(&tc, &heater, &setpoint,9,0.001,2, DIRECT);
 
 // define i/o, etc
-const int relay = 7;
-int relayState;
-const int runpb = 8;
-double dabTemp = 460; // dab temp
-double WindowSize = 1250; //  max output pulse width in msec
-unsigned long windowStartTime;
+Input<8> runPb(true);
+Output<7> relay(LOW);
+Output<13> led(LOW);
+
+int dabTemp = 450; // dab temp
+int WindowSize = 1250; //  max output pulse width in msec
 long purgeTime = 20000; // purge time in msec
-unsigned long runTime = 130000; // heat cycle run time in msec
+unsigned long windowStartTime;
+unsigned long runTime = 150000; // heat cycle run time in msec
 unsigned long startTime; // heat cycle start time
 boolean heating = false; // heat cycle running
 
 void setup() {
   myOLED.begin();
-  pinMode(runpb, INPUT);
-  digitalWrite(runpb, HIGH);  // turn on internal pull-up resistor
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);  // turn off led
-  pinMode(relay, OUTPUT);
-  digitalWrite(relay, LOW); //init relay to off
   Serial.begin(230400);
- // set PID to range between 0 and 40% window size
   myPID.SetOutputLimits(0, WindowSize);
-  myPID.SetSampleTime(100); // 100msec
-  windowStartTime = millis();
   setpoint = dabTemp; // init set point
+  windowStartTime = millis();
 
   // set up timer1 for 50ms interrupts 
   noInterrupts();           // disable all interrupts
@@ -76,44 +70,43 @@ void setup() {
 ISR(TIMER1_COMPA_vect) {
   if (!heating)
   {
-    digitalWrite(relay, LOW);  // make sure relay is off
+    relay.write(LOW);  // make sure relay is off
   }
   else
   {
     driveOutput();
   }
 }
- 
 
 void loop() {      
    myOLED.clrScr();
    myOLED.setFont(SmallFont);   
-   pv = tc.readFarenheit();
-   if (!heating && digitalRead(runpb) == LOW) { // start cycle
+   tc = thermocouple.readFarenheit(); // read thermocouple
+   if (!heating && runPb.read() == LOW) { // start cycle
      startTime = millis();
      setpoint = dabTemp + 50; // increase temp for purgeTime at start
      windowStartTime = millis();
      heating = true;
      myPID.SetMode(AUTOMATIC);  //turn the PID on
-     digitalWrite(LED_BUILTIN, HIGH);
+     led.write(HIGH); // turn on built-in led
    }
    if (heating) {
     if ((millis() - startTime) >= runTime) { // time's up, stop cycle
      heating = false; 
      myPID.SetMode(MANUAL);  //turn the PID off
-     digitalWrite(LED_BUILTIN, LOW);
+     led.write(LOW);
     }
     if ((millis() - startTime) >= purgeTime) { // switch to dabTemp
      setpoint = dabTemp;
     }
-    if (!isnan(pv) && (pv > 0)) {
+    if (!isnan(tc) && (tc > 0)) {
      myPID.Compute();
      myOLED.print("*** heating ***", CENTER, 1);
-     Serial.print(pv); // for logging output
+     Serial.print(tc); // PID input
      Serial.print("  ");
-     Serial.print(heater);
+     Serial.print(heater); // PID output
      Serial.print("  ");
-     Serial.println(relayState * 300);
+     Serial.println(relay.read() * 300); // multiply relay state by an arbitrary number for plot
     }
    }
 
@@ -123,7 +116,7 @@ void loop() {
      myOLED.print("*F", RIGHT, 37);
      myOLED.print("sec", RIGHT, 48);
      myOLED.setFont(MediumNumbers);
-     myOLED.printNumI(pv, CENTER, 16);
+     myOLED.printNumI(tc, CENTER, 16);
      if (heating) {
        myOLED.printNumI(((runTime - (millis() - startTime)) / 1000), CENTER, 48);
      }
@@ -139,13 +132,11 @@ void driveOutput() {
      if(now - windowStartTime > WindowSize) { //time shift the relay window
        windowStartTime += WindowSize;
      }
-     if (heater > (now - windowStartTime)) {
-      digitalWrite(relay,HIGH);
-      relayState = 1; // for logging output
+     if (heater > now - windowStartTime) {
+      relay.write(HIGH);
      }
      else {
-      digitalWrite(relay,LOW);
-      relayState = 0;
+      relay.write(LOW);
      }
 }
 
