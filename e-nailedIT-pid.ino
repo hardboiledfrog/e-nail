@@ -8,6 +8,7 @@
 //
 ////////////////////////////////////////////////////
 
+#include <EEPROM.h>
 #include <DirectIO.h>
 #include <PID_v1.h>
 #include <OLED_I2C.h>
@@ -37,19 +38,24 @@ Input<8> runPb(true);
 Output<7> relay(LOW);
 Output<13> led(LOW);
 
-int dabTemp = 450; // dab temp
+int eepAddr = 0; // eeprom storage for dabCount
+int dabCount;
+int dabTemp = 440; // dab temp
 int WindowSize = 1250; //  max output pulse width in msec
 long purgeTime = 20000; // purge time in msec
 unsigned long windowStartTime;
-unsigned long runTime = 150000; // heat cycle run time in msec
+unsigned long runTime = 180000; // heat cycle run time in msec
 unsigned long startTime; // heat cycle start time
+unsigned long endTime; // heat cycle end time
 boolean heating = false; // heat cycle running
 
 void setup() {
+  //EEPROM.write(eepAddr, 0); // clear stored dabCount
   myOLED.begin();
   Serial.begin(230400);
   myPID.SetOutputLimits(0, WindowSize);
   setpoint = dabTemp; // init set point
+  dabCount = EEPROM.read(eepAddr); // init set point
   windowStartTime = millis();
 
   // set up timer1 for 50ms interrupts 
@@ -83,44 +89,22 @@ void loop() {
    myOLED.setFont(SmallFont);   
    tc = thermocouple.readFarenheit(); // read thermocouple
    if (!heating && runPb.read() == LOW) { // start cycle
-     startTime = millis();
-     setpoint = dabTemp + 50; // increase temp for purgeTime at start
-     windowStartTime = millis();
-     heating = true;
-     myPID.SetMode(AUTOMATIC);  //turn the PID on
-     led.write(HIGH); // turn on built-in led
+    startCycle();
    }
    if (heating) {
-    if ((millis() - startTime) >= runTime) { // time's up, stop cycle
-     heating = false; 
-     myPID.SetMode(MANUAL);  //turn the PID off
-     led.write(LOW);
+    if ((millis() - startTime) >= runTime || runPb.read() == LOW) { // time's up, stop cycle
+      stopCycle();
     }
     if ((millis() - startTime) >= purgeTime) { // switch to dabTemp
      setpoint = dabTemp;
     }
-    if (!isnan(tc) && (tc > 0)) {
+    if (!isnan(tc) && (tc > 0)) { // if tc reading is valid
      myPID.Compute();
      myOLED.print("*** heating ***", CENTER, 1);
-     Serial.print(tc); // PID input
-     Serial.print("  ");
-     Serial.print(heater); // PID output
-     Serial.print("  ");
-     Serial.println(relay.read() * 300); // multiply relay state by an arbitrary number for plot
+     logPID();
     }
    }
-
-     myOLED.print("*F", RIGHT, 16);
-     myOLED.print("sp", LEFT, 37);
-     myOLED.printNumI(setpoint, CENTER, 37);
-     myOLED.print("*F", RIGHT, 37);
-     myOLED.print("sec", RIGHT, 48);
-     myOLED.setFont(MediumNumbers);
-     myOLED.printNumI(tc, CENTER, 16);
-     if (heating) {
-       myOLED.printNumI(((runTime - (millis() - startTime)) / 1000), CENTER, 48);
-     }
-     myOLED.update();
+   displayData();
 }
 
 void driveOutput() {
@@ -138,5 +122,52 @@ void driveOutput() {
      else {
       relay.write(LOW);
      }
+}
+
+void startCycle() {
+     startTime = millis();
+     delay(500); // sketchy pb debounce
+     if (startTime - endTime > 10000) {
+       setpoint = dabTemp + 50; // increase temp for purgeTime at start
+       dabCount ++;
+       EEPROM.update(eepAddr,dabCount);
+     } // else if within 10 seconds of last cycle stay at dabTemp
+     heating = true;
+     led.write(HIGH); // turn on built-in led
+     myPID.SetMode(AUTOMATIC);  //turn the PID on
+     windowStartTime = millis();
+}
+
+void stopCycle() {
+     heating = false; 
+     myPID.SetMode(MANUAL);  //turn the PID off
+     led.write(LOW);
+     endTime = millis();
+     setpoint = dabTemp; // make sure we're displaying correct sp
+     delay(500); // sketchy pb debounce
+}
+
+void logPID() {
+     Serial.print(tc); // PID input
+     Serial.print("  ");
+     Serial.print(heater); // PID output
+     Serial.print("  ");
+     Serial.println(relay.read() * 300); // multiply relay state by an arbitrary number for plot
+}
+
+void displayData() {
+     myOLED.print("*F", 90, 16);
+     myOLED.print("dc", LEFT, 37);
+     myOLED.print("sp", 75, 37);
+     myOLED.printNumI(dabCount, 30, 37);
+     myOLED.printNumI(setpoint, 92, 37);
+     myOLED.print("*F", RIGHT, 37);
+     myOLED.print("sec", 92, 48);
+     myOLED.setFont(MediumNumbers);
+     myOLED.printNumI(tc, CENTER, 16);
+     if (heating) {
+       myOLED.printNumI(((runTime - (millis() - startTime)) / 1000), CENTER, 48);
+     }
+     myOLED.update();
 }
 
