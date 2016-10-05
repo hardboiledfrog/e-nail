@@ -5,7 +5,7 @@
 // for my ZVS induction coil e-nail heater.
 // 
 // released to the public domain  9/15/2016  hbf
-//
+// a big thanks to the authors of the included libraries
 ////////////////////////////////////////////////////
 
 #include <EEPROM.h>
@@ -28,33 +28,33 @@ extern uint8_t MediumNumbers[];
 OLED  myOLED(SDA, SCL, 8);
 
 // define PID variables
-double setpoint, tc, heater;
+double setpoint = 440;
+double tc; // thermocouple PID input
+double heater; // PID output
 
-// set up variables and initial tuning parameters
-PID myPID(&tc, &heater, &setpoint,9,0.001,2, DIRECT);
+// set up PID variables and initial tuning parameters
+PID myPID(&tc, &heater, &setpoint,20,0.2,1, DIRECT); // tuning for banggood ZVS
+//PID myPID(&tc, &heater, &setpoint,9,0.001,2, DIRECT); // tuning for my ZVS
 
 // define i/o, etc
-Input<8> runPb(true);
-Output<7> relay(LOW);
+Input<8> runPb(true); // set pin 8 for input & enable pull-up resistor
+Output<7> relay(LOW); // set pin 7 for output & low initial state
 Output<13> led(LOW);
 
 int eepAddr = 0; // eeprom storage for dabCount
-int dabCount;
-int dabTemp = 440; // dab temp
+int dabCount; // number of run cycles
 int WindowSize = 1250; //  max output pulse width in msec
-long purgeTime = 20000; // purge time in msec
 unsigned long windowStartTime;
-unsigned long runTime = 180000; // heat cycle run time in msec
+unsigned long runTime = 210000; // heat cycle run time in msec
 unsigned long startTime; // heat cycle start time
 unsigned long endTime; // heat cycle end time
 boolean heating = false; // heat cycle running
 
 void setup() {
-  //EEPROM.write(eepAddr, 0); // clear stored dabCount
+  //EEPROM.write(eepAddr, 2); // clear or set stored dabCount
   myOLED.begin();
   Serial.begin(230400);
   myPID.SetOutputLimits(0, WindowSize);
-  setpoint = dabTemp; // init set point
   dabCount = EEPROM.read(eepAddr); // init set point
   windowStartTime = millis();
 
@@ -86,7 +86,7 @@ ISR(TIMER1_COMPA_vect) {
 
 void loop() {      
    myOLED.clrScr();
-   myOLED.setFont(SmallFont);   
+   myOLED.setFont(SmallFont);
    tc = thermocouple.readFarenheit(); // read thermocouple
    if (!heating && runPb.read() == LOW) { // start cycle
     startCycle();
@@ -94,9 +94,6 @@ void loop() {
    if (heating) {
     if ((millis() - startTime) >= runTime || runPb.read() == LOW) { // time's up, stop cycle
       stopCycle();
-    }
-    if ((millis() - startTime) >= purgeTime) { // switch to dabTemp
-     setpoint = dabTemp;
     }
     if (!isnan(tc) && (tc > 0)) { // if tc reading is valid
      myPID.Compute();
@@ -128,10 +125,9 @@ void startCycle() {
      startTime = millis();
      delay(500); // sketchy pb debounce
      if (startTime - endTime > 10000) {
-       setpoint = dabTemp + 50; // increase temp for purgeTime at start
        dabCount ++;
        EEPROM.update(eepAddr,dabCount);
-     } // else if within 10 seconds of last cycle stay at dabTemp
+     } // else if within 10 seconds of last cycle stay at setpoint
      heating = true;
      led.write(HIGH); // turn on built-in led
      myPID.SetMode(AUTOMATIC);  //turn the PID on
@@ -143,7 +139,6 @@ void stopCycle() {
      myPID.SetMode(MANUAL);  //turn the PID off
      led.write(LOW);
      endTime = millis();
-     setpoint = dabTemp; // make sure we're displaying correct sp
      delay(500); // sketchy pb debounce
 }
 
