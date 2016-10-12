@@ -28,22 +28,31 @@ extern uint8_t MediumNumbers[];
 OLED  myOLED(SDA, SCL, 8);
 
 // define PID variables
+double WindowSize = 1250; //  max output pulse width in msec
 double setpoint = 440;
 double tc; // thermocouple PID input
 double heater; // PID output
+double aggKp = 60;  // tuning for banggood ZVS
+double aggKi = 0.2;
+double aggKd = 5;
+double consKp = 40;
+double consKi = 0.0001;
+double consKd = 0.01;
 
+/*double kp,= 9;  // tuning for my ZVS
+double ki = 0.001;
+double kd = 2;
+*/
 // set up PID variables and initial tuning parameters
-PID myPID(&tc, &heater, &setpoint,20,0.2,1, DIRECT); // tuning for banggood ZVS
-//PID myPID(&tc, &heater, &setpoint,9,0.001,2, DIRECT); // tuning for my ZVS
+PID myPID(&tc, &heater, &setpoint, aggKp, aggKi, aggKd, DIRECT);
 
 // define i/o, etc
 Input<8> runPb(true); // set pin 8 for input & enable pull-up resistor
 Output<7> relay(LOW); // set pin 7 for output & low initial state
 Output<13> led(LOW);
 
-int eepAddr = 0; // eeprom storage for dabCount
+int eepDc = 0; // eeprom storage location for dabCount
 int dabCount; // number of run cycles
-int WindowSize = 1250; //  max output pulse width in msec
 unsigned long windowStartTime;
 unsigned long runTime = 210000; // heat cycle run time in msec
 unsigned long startTime; // heat cycle start time
@@ -51,11 +60,11 @@ unsigned long endTime; // heat cycle end time
 boolean heating = false; // heat cycle running
 
 void setup() {
-  //EEPROM.write(eepAddr, 2); // clear or set stored dabCount
   myOLED.begin();
   Serial.begin(230400);
   myPID.SetOutputLimits(0, WindowSize);
-  dabCount = EEPROM.read(eepAddr); // init set point
+  //EEPROM.write(eepDc, 0); // clear or set stored dabCount
+  dabCount = EEPROM.read(eepDc);
   windowStartTime = millis();
 
   // set up timer1 for 50ms interrupts 
@@ -96,9 +105,22 @@ void loop() {
       stopCycle();
     }
     if (!isnan(tc) && (tc > 0)) { // if tc reading is valid
+     double error = abs(setpoint-tc); //distance away from setpoint
+     if(error <= 10)
+     {  //we're close to setpoint, use conservative tuning parameters
+       myPID.SetTunings(consKp, consKi, consKd);
+     }
+     else
+     {
+        //we're far from setpoint, use aggressive tuning parameters
+       myPID.SetTunings(aggKp, aggKi, aggKd);
+     }
      myPID.Compute();
-     myOLED.print("*** heating ***", CENTER, 1);
+     myOLED.print("*** heating ***", LEFT, 1);
+     myOLED.printNumF(error, 2, RIGHT, 1);
      logPID();
+     Serial.print("  ");
+     Serial.println(error); // PID error
     }
    }
    displayData();
@@ -124,10 +146,10 @@ void driveOutput() {
 void startCycle() {
      startTime = millis();
      delay(500); // sketchy pb debounce
-     if (startTime - endTime > 10000) {
+     if (startTime - endTime > 10000) { // if within 10 seconds of last cycle don't increment counter
        dabCount ++;
-       EEPROM.update(eepAddr,dabCount);
-     } // else if within 10 seconds of last cycle stay at setpoint
+       EEPROM.update(eepDc,dabCount);
+     }
      heating = true;
      led.write(HIGH); // turn on built-in led
      myPID.SetMode(AUTOMATIC);  //turn the PID on
@@ -147,7 +169,7 @@ void logPID() {
      Serial.print("  ");
      Serial.print(heater); // PID output
      Serial.print("  ");
-     Serial.println(relay.read() * 300); // multiply relay state by an arbitrary number for plot
+     Serial.print(relay.read() * 300); // multiply relay state by an arbitrary number for plot
 }
 
 void displayData() {
