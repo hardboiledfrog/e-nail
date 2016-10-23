@@ -270,34 +270,43 @@ const byte modeMax = 3; // This is the number of submenus/settings you want
   if(oldEncPos != encoderPos) {
     display.setTextSize(2); // the encoder position prints but is immediately cleared if Mode = 0
     display.setCursor(50,32);
-    display.setTextColor(BLACK);
+//    display.setTextColor(WHITE, BLACK);
     display.print(oldEncPos); //clears previous setting on display
     display.setCursor(50,32);
+    display.setTextColor(BLACK, WHITE); // display new setting in black on white
+    display.print(encoderPos); // displays new setting when encoder rotated 
     display.setTextColor(WHITE);
-    display.print(encoderPos); // displays new setting when encoder rotated
     if (Mode == 0) {
-        display.clearDisplay();
-        display.setCursor(20,0);
-    switch(encoderPos) { // Sometimes the serial monitor may show a value just outside modeMax due to this function. The menu shouldn't be affected.
-      case 0: {
-        display.print("> ready");
+     int value;
+     display.clearDisplay();
+     display.setCursor(35,0);
+     switch(encoderPos) { 
+      case 0: { // menu top, ready to run 
+        display.print("ready");
         break;
       }
       case 1: {
-        display.println("  set");
-        display.print("  temp");
+        display.println(" set");
+        display.print("    temp");
+        value = (int(setpoint)); // display current value
         break;
       }
       case 2: {
-        display.println("  set");
-        display.print("  time");
+        display.println(" set");
+        display.print("    time");
+        value = (runTime / 1000); // display current value
         break;
       }
       case 3: {
-        display.println("  set");
-        display.print("counter");
+        display.println(" set");
+        display.print("  counter");
+        value = (dabCount); // display current value
         break;
       }
+    }
+    if (encoderPos != 0) { // if on one of the setting screens
+     display.setCursor(50,32);
+     display.print(value); // display currently set value
     }
     }
     oldEncPos = encoderPos;
@@ -308,8 +317,8 @@ const byte modeMax = 3; // This is the number of submenus/settings you want
       if (encoderPos == 0) { // display ready screen
       display.clearDisplay();
       display.setTextSize(2);
-      display.setCursor(20,0);
-      display.print("> ready");
+      display.setCursor(35,0);
+      display.print("ready");
       display.setTextSize(1);
       display.setCursor(90,40);
       display.print("*F");
@@ -327,7 +336,6 @@ const byte modeMax = 3; // This is the number of submenus/settings you want
       if (buttonPressed){ 
         Mode = encoderPos; // set the Mode to the current value of encoder if knob pressed
         buttonPressed = 0; // reset the button status so one press results in one action
-        display.print(" =");
         switch (Mode) {
           case 0: { // start a heating cycle
             startCycle();
