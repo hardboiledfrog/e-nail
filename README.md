@@ -1,5 +1,5 @@
 # e-nail
-These sketch files are a closed loop temperature controller for an induction heated e-nail
+These sketch files are a closed loop temperature controller for an induction heated e-nail using an inexpensive popular Chinese ZVS induction heating module.
 
 http://imgur.com/a/UtVF6
 
