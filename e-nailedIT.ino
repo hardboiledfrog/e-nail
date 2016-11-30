@@ -413,21 +413,21 @@ const byte modeMax = 6; // This is the number of submenus/settings you want
   //Main menu section, switches mode if knob pressed
   if (mode == 0) { // ready to run state, turn knob for settings, push knob to start / stop.
       if (encoderPos == 0) { // display ready screen
-      display.clearDisplay();
-      display.setTextSize(2);
-      display.setCursor(35,0);
-      display.print("ready");
-      display.setTextSize(1);
-     if (upTemp) {
-       display.setCursor(60, 23);
-       display.print("UT");      
-     }
-      display.setCursor(90,40);
-      display.print("*F");
-      display.setCursor(50,40);
-      display.setTextSize(2);
-      display.print(int(tc)); // display temp when not running
-      display.setTextSize(1);
+        display.clearDisplay();
+        display.setTextSize(2);
+        display.setCursor(35,0);
+        display.print("ready");
+        display.setTextSize(1);
+        if (upTemp) {
+          display.setCursor(60, 23);
+          display.print("UT");      
+        }
+        display.setCursor(90,40);
+        display.print("*F");
+        display.setCursor(50,40);
+        display.setTextSize(2);
+        display.print(int(tc)); // display temp when not running
+        display.setTextSize(1);
       }
       if (encoderPos < 0) {
         encoderPos = modeMax; // check we haven't gone out of bounds below 0 and correct if we have
@@ -489,7 +489,7 @@ const byte modeMax = 6; // This is the number of submenus/settings you want
           display.setTextColor(BLACK, WHITE);
           display.print(encoderPos);
         }
-       }
+      }
   }
   // if a change setting mode selected the next knob press changes the value
   else if (button.onPressed()) {
