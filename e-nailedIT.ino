@@ -92,8 +92,8 @@ unsigned long endTime; // heat cycle end time
 boolean heating = false; // heat cycle running
 
 void setup() {
-  pinMode(relay, OUTPUT); // BG relay
-  digitalWrite(relay, LOW); // relay module low true
+  pinMode(relay, OUTPUT); // heater control relay
+  digitalWrite(relay, LOW); // init to off
   Serial.begin(230400);
   // uncomment these lines to store initial values to new chip
   // be sure to comment them out when done or you'll burn out eeprom cells
@@ -419,7 +419,7 @@ const byte modeMax = 6; // This is the number of submenus/settings you want
       display.print("ready");
       display.setTextSize(1);
      if (upTemp) {
-       display.setCursor(60, 20);
+       display.setCursor(60, 23);
        display.print("UT");      
      }
       display.setCursor(90,40);
