@@ -62,7 +62,7 @@ double tc; // thermocouple PID input
 double error; // = tc - setpoint 
 double heater; // PID output
 double Kp; // (60) PID tuning parameters 
-double Ki; // (5)
+double Ki; // (10)
 double Kd; // (1)
 double N; // (100) derivative filter constant D(s)=s/(1+s/N)
 //a good rule is: N>10*Kd/Kp (also avoid too large values)
@@ -81,7 +81,7 @@ unsigned int eepKp = 10; // eeprom storage location for PID tuning parameter
 unsigned int eepKi = 14; // eeprom storage location for PID tuning parameter
 unsigned int eepKd = 18; // eeprom storage location for PID tuning parameter
 unsigned int eepN = 22; // eeprom storage location for PID tuning parameter
-unsigned int eepUt = 26; // eeprom storage location for PID tuning parameter
+unsigned int eepUt = 26; // eeprom storage location for upTemp flag
 unsigned int eepRat = 27; // eeprom storage location for rampTime
 unsigned int eepSt = 29; // eeprom storage location for startTemp
 unsigned int dabCount; // number of run cycles
@@ -114,7 +114,7 @@ void setup() {
   }
   Ki = EEPROM.readDouble(eepKi);
   if (isnan(Ki)) {
-    Ki = 5;
+    Ki = 10;
   }
   Kd = EEPROM.readDouble(eepKd);
   if (isnan(Kd)) {
@@ -250,7 +250,7 @@ unsigned long now = millis();
       }
       oldEncPos = encoderPos;
     }
-    setpoint = constrain(setpoint, 0, 500);
+    setpoint = constrain(setpoint, 0, 650); // hard limits for setpoint
     now = micros();
     if ((now - lastTimePID) >= period) { // compute PID at interval set by period
      lastTimePID = now;
@@ -313,7 +313,7 @@ void displayRunData() {
 }
 
 void rotaryMenu() { 
-const byte modeMax = 6; // This is the number of submenus/settings you want
+const byte modeMax = 10; // This is the number of submenus/settings you want
 // top menu section, check for knob turn, displays mode selections
   if(oldEncPos != encoderPos) {
     if (mode == 3) { // limit encoderPos to 0 or 1 for upTemp enable
@@ -372,35 +372,34 @@ const byte modeMax = 6; // This is the number of submenus/settings you want
       }
       case 6: {
         display.println(" set");
-        display.print("  counter");
-        value = EEPROM.readInt(eepDc); // display current value
-        break;
-      }
-/* uncomment and change modeMax for tuning menu screens
-      case 7: {
-        display.println(" set");
         display.print("    Kp");
         value = EEPROM.readDouble(eepKp); // display current value
         break;
       }
-      case 8: {
+      case 7: {
         display.println(" set");
         display.print("    Ki");
         value = EEPROM.readDouble(eepKi); // display current value
         break;
       }
-      case 9: {
+      case 8: {
         display.println(" set");
         display.print("    Kd");
         value = EEPROM.readDouble(eepKd); // display current value
         break;
       }
-      case 10: {
+      case 9: {
         display.println(" set");
         display.print("    N");
         value = EEPROM.readDouble(eepN); // display current value
         break;
-      }*/
+      }
+      case 10: {
+        display.println(" set");
+        display.print("  counter");
+        value = EEPROM.readInt(eepDc); // display current value
+        break;
+      }
      }
      if (encoderPos != 0) { // if on one of the setting screens
       display.setCursor(50,32);
@@ -458,31 +457,30 @@ const byte modeMax = 6; // This is the number of submenus/settings you want
             encoderPos = int(startTemp); // start adjusting temperature from last set point
             break;
           }
-          case 5: { // change PID tuning parameter
+          case 5: { // change upTemp rampTime
             encoderPos = rampTime; // start adjusting Kp from last set point
             break;
           }
-          case 6: { // change dab counter total
-            encoderPos = dabCount; // start adjusting dab count from last set point
-            break;
-          }
-/* uncomment for tuning menu screens
-          case 7: { // change PID tuning parameter
+          case 6: { // change PID tuning parameter
             encoderPos = Kp; // start adjusting Kp from last set point
             break;
           }
-          case 8: { // change PID tuning parameter
+          case 7: { // change PID tuning parameter
             encoderPos = Ki; // start adjusting Ki from last set point
             break;
           }
-          case 9: { // change PID tuning parameter
+          case 8: { // change PID tuning parameter
             encoderPos = Kd; // start adjusting Kd from last set point
             break;
           }
-          case 10: { // change PID tuning parameter
+          case 9: { // change PID tuning parameter
             encoderPos = N; // start adjusting N from last set point
             break;
-          }*/
+          }
+          case 10: { // change dab counter total
+            encoderPos = dabCount; // start adjusting dab count from last set point
+            break;
+          }
         }
         if (mode != 0) { // if not starting, display current setting
           display.setCursor(50,32);
@@ -506,49 +504,47 @@ const byte modeMax = 6; // This is the number of submenus/settings you want
       }
       case 3: {
         upTemp = encoderPos;
-        EEPROM.updateByte(eepUt, upTemp); // only write eeprom if value changed
+        EEPROM.updateByte(eepUt, upTemp);
         break;
       }
       case 4: {
-        startTemp = float(encoderPos); // record whatever encoder value to setting
-        EEPROM.updateDouble(eepSt, startTemp); // only write eeprom if value changed
+        startTemp = float(encoderPos);
+        EEPROM.updateDouble(eepSt, startTemp);
         break;
       }
       case 5: {
-        rampTime = encoderPos; // record whatever encoder value to setting
-        EEPROM.updateInt(eepRat, rampTime); // only write eeprom if value changed
+        rampTime = encoderPos;
+        EEPROM.updateInt(eepRat, rampTime);
         break;
       }
       case 6: {
+        Kp = float(encoderPos);
+        EEPROM.updateDouble(eepKp, Kp);
+        break;
+      }
+      case 7: {
+        Ki = float(encoderPos);
+        EEPROM.updateDouble(eepKi, Ki);
+        break;
+      }
+      case 8: {
+        Kd = float(encoderPos);
+        EEPROM.updateDouble(eepKd, Kd);
+        break;
+      }
+      case 9: {
+        N = float(encoderPos);
+        EEPROM.updateDouble(eepN, N);
+        break;
+      }
+      case 10: {
         dabCount = encoderPos;
         EEPROM.updateInt(eepDc, dabCount);
         break;
       }
-/* uncomment for tuning menu screens         
-      case 7: {
-        Kp = float(encoderPos); // record whatever encoder value to setting
-        EEPROM.updateDouble(eepKp, Kp); // only write eeprom if value changed
-        break;
-      }
-      case 8: {
-        Ki = float(encoderPos); // record whatever encoder value to setting
-        EEPROM.updateDouble(eepKi, Ki); // only write eeprom if value changed
-        break;
-      }
-      case 9: {
-        Kd = float(encoderPos); // record whatever encoder value to setting
-        EEPROM.updateDouble(eepKd, Kd); // only write eeprom if value changed
-        break;
-      }
-      case 10: {
-        N = float(encoderPos); // record whatever encoder value to setting
-        EEPROM.updateDouble(eepN, N); // only write eeprom if value changed
-        break;
-      }
     }
-    if (mode >= 7 && mode <= 10) { // case 6 -9
+    if (mode >= 6 && mode <= 9) { // case 6 -9
      myPID.SetTunings(Kp, Ki, Kd, N); //sets PID tuning parameters;
-*/
     }
     display.println("");
     display.setCursor(40,48);
