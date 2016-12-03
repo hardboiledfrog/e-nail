@@ -62,7 +62,7 @@ double tc; // thermocouple PID input
 double error; // = tc - setpoint 
 double heater; // PID output
 double Kp; // (60) PID tuning parameters 
-double Ki; // (10)
+double Ki; // (20)
 double Kd; // (1)
 double N; // (100) derivative filter constant D(s)=s/(1+s/N)
 //a good rule is: N>10*Kd/Kp (also avoid too large values)
@@ -114,7 +114,7 @@ void setup() {
   }
   Ki = EEPROM.readDouble(eepKi);
   if (isnan(Ki)) {
-    Ki = 10;
+    Ki = 20;
   }
   Kd = EEPROM.readDouble(eepKd);
   if (isnan(Kd)) {
