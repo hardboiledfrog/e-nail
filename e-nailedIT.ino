@@ -62,7 +62,7 @@ double tc; // thermocouple PID input
 double error; // = tc - setpoint 
 double heater; // PID output
 double Kp; // (60) PID tuning parameters 
-double Ki; // (20)
+double Ki; // (5)
 double Kd; // (1)
 double N; // (100) derivative filter constant D(s)=s/(1+s/N)
 //a good rule is: N>10*Kd/Kp (also avoid too large values)
@@ -114,7 +114,7 @@ void setup() {
   }
   Ki = EEPROM.readDouble(eepKi);
   if (isnan(Ki)) {
-    Ki = 20;
+    Ki = 5;
   }
   Kd = EEPROM.readDouble(eepKd);
   if (isnan(Kd)) {
@@ -229,10 +229,10 @@ void runCycle() {
 static unsigned long lastTimePID = 0;
 static unsigned long lastTimeUt = 0;
 unsigned long now = millis();
-    if ((now - startTime) >= runTime || button.onPressed()) { // time's up, stop cycle
+    if ((now - startTime) >= runTime || button.onPressed()) { // time's up or knob pressed, stop cycle
       stopCycle();
     }
-    if (upTemp && tc >= startTemp && setpoint < endTemp) {
+    if (upTemp && tc >= startTemp && setpoint <= (endTemp - tempStep)) {
       if (now - lastTimeUt >= 1000) { // increment temp every second
         setpoint += tempStep;
         lastTimeUt = now;
@@ -250,7 +250,7 @@ unsigned long now = millis();
       }
       oldEncPos = encoderPos;
     }
-    setpoint = constrain(setpoint, 0, 650); // hard limits for setpoint
+    setpoint = constrain(setpoint, 0, 800); // hard limits for setpoint
     now = micros();
     if ((now - lastTimePID) >= period) { // compute PID at interval set by period
      lastTimePID = now;
