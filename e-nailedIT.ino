@@ -37,6 +37,10 @@ const byte OLED_CS = 8;
 Adafruit_SSD1306 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
 // declare OLED power pin
 const byte v5d = 13;
+// check if correct display is used in header file
+#if (SSD1306_LCDHEIGHT != 64)
+#error("Height incorrect, please fix Adafruit_SSD1306.h!");
+#endif
 
 // Rotary encoder declarations
 const byte pinA = 2; // Our first hardware interrupt pin is digital pin 2
@@ -106,7 +110,7 @@ void setup() {
   runTime = EEPROM.readLong(eepRut);
   setpoint = EEPROM.readDouble(eepSp);
   if (isnan(setpoint)) { // if EEPROM value bad load defaults
-    setpoint = 420;
+    setpoint = 520;
   }
   Kp = EEPROM.readDouble(eepKp);
   if (isnan(Kp)) {
@@ -232,7 +236,7 @@ unsigned long now = millis();
     if ((now - startTime) >= runTime || button.onPressed()) { // time's up or knob pressed, stop cycle
       stopCycle();
     }
-    if (upTemp && tc >= startTemp && setpoint <= (endTemp - tempStep)) {
+    if (upTemp && tc >= startTemp && setpoint <= (endTemp - (tempStep / 2))) {
       if (now - lastTimeUt >= 1000) { // increment temp every second
         setpoint += tempStep;
         lastTimeUt = now;
