@@ -13,6 +13,7 @@ If you have soldering skills I recommend mounting the components on the Proto-Sh
 
 pics here:
 https://imgur.com/a/lFThz
+
 http://imgur.com/a/UtVF6
 
 
