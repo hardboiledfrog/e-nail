@@ -1,4 +1,4 @@
-
+ 
 /////////////////////////////////////////////////////
 // my e-nail Induction Tech controller,
 // a PID closed loop temperature controller 
@@ -29,6 +29,10 @@ Adafruit_MAX31855 thermocouple(CLK, CS, DO);
 
 // create OLED instance
 // If using software SPI (the default case):
+// check if correct display is used in header file
+#if (SSD1306_LCDHEIGHT != 64)
+#error("Height incorrect, please fix Adafruit_SSD1306.h!");
+#endif
 const byte OLED_CLK = 12;
 const byte OLED_MOSI = 11;
 const byte OLED_RESET = 10;
@@ -37,10 +41,6 @@ const byte OLED_CS = 8;
 Adafruit_SSD1306 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
 // declare OLED power pin
 const byte v5d = 13;
-// check if correct display is used in header file
-#if (SSD1306_LCDHEIGHT != 64)
-#error("Height incorrect, please fix Adafruit_SSD1306.h!");
-#endif
 
 // Rotary encoder declarations
 const byte pinA = 2; // Our first hardware interrupt pin is digital pin 2
@@ -56,11 +56,7 @@ RBD::Button button(4); // this is the Arduino pin we are connecting the push but
 
 // define PID & variables
 double windowSize = 1250; //  max output pulse width in msec
-double startTemp;
-double endTemp;
-double tempStep;
-byte rampTime; // temperature ramp up time in sec
-byte upTemp; // flag to ramp up temp from startTemp to endTemp (selected setpoint)
+byte insert = 1; // flag for insert use
 double setpoint;
 double tc; // thermocouple PID input
 double error; // = tc - setpoint 
@@ -85,9 +81,7 @@ unsigned int eepKp = 10; // eeprom storage location for PID tuning parameter
 unsigned int eepKi = 14; // eeprom storage location for PID tuning parameter
 unsigned int eepKd = 18; // eeprom storage location for PID tuning parameter
 unsigned int eepN = 22; // eeprom storage location for PID tuning parameter
-unsigned int eepUt = 26; // eeprom storage location for upTemp flag
-unsigned int eepRat = 27; // eeprom storage location for rampTime
-unsigned int eepSt = 29; // eeprom storage location for startTemp
+unsigned int eepIn = 26; // eeprom storage location for insert flag
 unsigned int dabCount; // number of run cycles
 unsigned long runTime; // heat cycle run time in msec
 unsigned long windowStartTime;
@@ -103,14 +97,12 @@ void setup() {
   // be sure to comment them out when done or you'll burn out eeprom cells
   //EEPROM.updateDouble(eepSp, setpoint); // clear or set stored value
   //EEPROM.updateLong(eepRt, runTime); // clear or set stored value
-  upTemp = EEPROM.readByte(eepUt);
-  startTemp = EEPROM.readDouble(eepSt);
-  rampTime = EEPROM.readInt(eepRat);
+  insert = EEPROM.readByte(eepIn);
   dabCount = EEPROM.readInt(eepDc);
   runTime = EEPROM.readLong(eepRut);
   setpoint = EEPROM.readDouble(eepSp);
   if (isnan(setpoint)) { // if EEPROM value bad load defaults
-    setpoint = 520;
+    setpoint = 550;
   }
   Kp = EEPROM.readDouble(eepKp);
   if (isnan(Kp)) {
@@ -181,10 +173,8 @@ void loop() {
    }
    else {
     unsigned long now = millis();
-    if (now - endTime < 240000L && tc > 230 && tc < 235) { // reminder to clean bucket when cool enough
-      tone(spkr, 500);
-      delay(150);
-      noTone(spkr);
+    if (now - endTime < 510000L && tc > 203 && tc < 205) { // reminder to clean bucket when cool enough
+      tone(spkr, 500, 150);
       delay(500);
     }
     rotaryMenu();
@@ -212,40 +202,30 @@ void driveOutput() {
 
 void startCycle() {
      startTime = millis();
-     if (startTime - endTime > 15000) { // if within 15 seconds of last cycle don't increment counter
-       if (upTemp) {
-         endTemp = EEPROM.readDouble(eepSp);
-         tempStep = (endTemp - startTemp) / rampTime;
-         setpoint = startTemp;
-       }
-       else {
-         setpoint = EEPROM.readDouble(eepSp);
-       }
-       dabCount ++;
-       EEPROM.updateInt(eepDc,dabCount);
+     if (insert) { // if using insert raise temp to heat soak dish
+      setpoint = EEPROM.readDouble(eepSp) + 30;
      }
-     heating = true;
+     else {
+      setpoint = EEPROM.readDouble(eepSp);
+     }
+     dabCount ++;
+     EEPROM.updateInt(eepDc,dabCount);
      myPID.Reset();
+     heating = true;
      windowStartTime = millis();
 }
 
 void runCycle() {
 static unsigned long lastTimePID = 0;
-static unsigned long lastTimeUt = 0;
 unsigned long now = millis();
     if ((now - startTime) >= runTime || button.onPressed()) { // time's up or knob pressed, stop cycle
       stopCycle();
+      return;
     }
-    if (upTemp && tc >= startTemp && setpoint <= (endTemp - (tempStep / 2))) {
-      if (now - lastTimeUt >= 1000) { // increment temp every second
-        setpoint += tempStep;
-        lastTimeUt = now;
-      }      
-      else if ((now - lastTimeUt) < 0) {
-       lastTimeUt = 0;
-      }
+    if (insert && now - startTime > 270000L && now - startTime < 271000L) {
+     setpoint = EEPROM.readDouble(eepSp);
     }
-    if(!upTemp && encoderPos != oldEncPos) { // adjust setpoint during run, +/- 10 degrees per detent 
+    if(encoderPos != oldEncPos) { // adjust setpoint during run, +/- 10 degrees per detent 
       if(encoderPos > oldEncPos) {
         setpoint += 10;
       }
@@ -254,7 +234,7 @@ unsigned long now = millis();
       }
       oldEncPos = encoderPos;
     }
-    setpoint = constrain(setpoint, 0, 800); // hard limits for setpoint
+    setpoint = constrain(setpoint, 0, 700); // hard limits for setpoint
     now = micros();
     if ((now - lastTimePID) >= period) { // compute PID at interval set by period
      lastTimePID = now;
@@ -289,12 +269,19 @@ void logPID() {
 }
 
 void displayRunData() {
+unsigned long now = millis();
      display.clearDisplay();
      display.setCursor(18,0);
-     display.print("*** heating ***");
-     if (upTemp) {
-       display.setCursor(0, 16);
-       display.print("UT");      
+     if (insert && now - startTime > 300000L) { // wait until SiC insert reaches temp
+      display.setTextColor(BLACK, WHITE); // display in black on white
+      display.print("*** dab it! ***");
+      display.setTextColor(WHITE);
+      if (now - startTime < 301500L) { // beep when ready
+       tone(spkr, 784, 200);
+      }
+     }
+     else {
+      display.print("*** heating ***");
      }
      display.setCursor(90,16);
      display.print(" *F");
@@ -311,16 +298,16 @@ void displayRunData() {
      display.setCursor(50,16);
      display.print(int(tc));
      display.setCursor(50, 48);
-     display.print((runTime - (millis() - startTime)) / 1000);
+     display.print((runTime - (millis() - startTime)) / 1000L);
      display.display();
      display.setTextSize(1);
 }
 
 void rotaryMenu() { 
-const byte modeMax = 10; // This is the number of submenus/settings you want
+const byte modeMax = 8; // This is the number of submenus/settings you want
 // top menu section, check for knob turn, displays mode selections
   if(oldEncPos != encoderPos) {
-    if (mode == 3) { // limit encoderPos to 0 or 1 for upTemp enable
+    if (mode == 3) { // limit encoderPos to 0 or 1 for insert enable
       if (encoderPos < 0) {
         encoderPos = 1; // 
       }
@@ -358,47 +345,35 @@ const byte modeMax = 10; // This is the number of submenus/settings you want
       }
       case 3: {
         display.println(" set");
-        display.print("  upTemp");
-        value = upTemp; // display current value
+        display.print("  insert");
+        value = insert; // display current value
         break;
       }
       case 4: {
-        display.println(" set");
-        display.print("startTemp");
-        value = int(EEPROM.readDouble(eepSt)); // display current value
-        break;
-      }
-      case 5: {
-        display.println(" set");
-        display.print(" ramptime");
-        value = EEPROM.readInt(eepRat); // display current value
-        break;
-      }
-      case 6: {
         display.println(" set");
         display.print("    Kp");
         value = EEPROM.readDouble(eepKp); // display current value
         break;
       }
-      case 7: {
+      case 5: {
         display.println(" set");
         display.print("    Ki");
         value = EEPROM.readDouble(eepKi); // display current value
         break;
       }
-      case 8: {
+      case 6: {
         display.println(" set");
         display.print("    Kd");
         value = EEPROM.readDouble(eepKd); // display current value
         break;
       }
-      case 9: {
+      case 7: {
         display.println(" set");
         display.print("    N");
         value = EEPROM.readDouble(eepN); // display current value
         break;
       }
-      case 10: {
+      case 8: {
         display.println(" set");
         display.print("  counter");
         value = EEPROM.readInt(eepDc); // display current value
@@ -421,10 +396,6 @@ const byte modeMax = 10; // This is the number of submenus/settings you want
         display.setCursor(35,0);
         display.print("ready");
         display.setTextSize(1);
-        if (upTemp) {
-          display.setCursor(60, 23);
-          display.print("UT");      
-        }
         display.setCursor(90,40);
         display.print("*F");
         display.setCursor(50,40);
@@ -454,34 +425,26 @@ const byte modeMax = 10; // This is the number of submenus/settings you want
             break;
            }
           case 3: { // enable / disable upTemp function
-            encoderPos = upTemp; // display current value
+            encoderPos = insert; // display current value
             break;
           }
-          case 4: { // change start temperature in upTemp mode
-            encoderPos = int(startTemp); // start adjusting temperature from last set point
-            break;
-          }
-          case 5: { // change upTemp rampTime
-            encoderPos = rampTime; // start adjusting Kp from last set point
-            break;
-          }
-          case 6: { // change PID tuning parameter
+          case 4: { // change PID tuning parameter
             encoderPos = Kp; // start adjusting Kp from last set point
             break;
           }
-          case 7: { // change PID tuning parameter
+          case 5: { // change PID tuning parameter
             encoderPos = Ki; // start adjusting Ki from last set point
             break;
           }
-          case 8: { // change PID tuning parameter
+          case 6: { // change PID tuning parameter
             encoderPos = Kd; // start adjusting Kd from last set point
             break;
           }
-          case 9: { // change PID tuning parameter
+          case 7: { // change PID tuning parameter
             encoderPos = N; // start adjusting N from last set point
             break;
           }
-          case 10: { // change dab counter total
+          case 8: { // change dab counter total
             encoderPos = dabCount; // start adjusting dab count from last set point
             break;
           }
@@ -507,47 +470,37 @@ const byte modeMax = 10; // This is the number of submenus/settings you want
         break;
       }
       case 3: {
-        upTemp = encoderPos;
-        EEPROM.updateByte(eepUt, upTemp);
+        insert = encoderPos;
+        EEPROM.updateByte(eepIn, insert);
         break;
       }
       case 4: {
-        startTemp = float(encoderPos);
-        EEPROM.updateDouble(eepSt, startTemp);
-        break;
-      }
-      case 5: {
-        rampTime = encoderPos;
-        EEPROM.updateInt(eepRat, rampTime);
-        break;
-      }
-      case 6: {
         Kp = float(encoderPos);
         EEPROM.updateDouble(eepKp, Kp);
         break;
       }
-      case 7: {
+      case 5: {
         Ki = float(encoderPos);
         EEPROM.updateDouble(eepKi, Ki);
         break;
       }
-      case 8: {
+      case 6: {
         Kd = float(encoderPos);
         EEPROM.updateDouble(eepKd, Kd);
         break;
       }
-      case 9: {
+      case 7: {
         N = float(encoderPos);
         EEPROM.updateDouble(eepN, N);
         break;
       }
-      case 10: {
+      case 8: {
         dabCount = encoderPos;
         EEPROM.updateInt(eepDc, dabCount);
         break;
       }
     }
-    if (mode >= 6 && mode <= 9) { // case 6 -9
+    if (mode >= 6 && mode <= 8) { // case 6 - 8
      myPID.SetTunings(Kp, Ki, Kd, N); //sets PID tuning parameters;
     }
     display.println("");
