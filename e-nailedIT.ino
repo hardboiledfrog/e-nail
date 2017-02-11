@@ -102,7 +102,7 @@ void setup() {
   runTime = EEPROM.readLong(eepRut);
   setpoint = EEPROM.readDouble(eepSp);
   if (isnan(setpoint)) { // if EEPROM value bad load defaults
-    setpoint = 550;
+    setpoint = 530;
   }
   Kp = EEPROM.readDouble(eepKp);
   if (isnan(Kp)) {
@@ -225,12 +225,12 @@ unsigned long now = millis();
     if (insert && now - startTime > 270000L && now - startTime < 271000L) {
      setpoint = EEPROM.readDouble(eepSp);
     }
-    if(encoderPos != oldEncPos) { // adjust setpoint during run, +/- 10 degrees per detent 
+    if(encoderPos != oldEncPos) { // adjust setpoint during run, +/- 5 degrees per detent 
       if(encoderPos > oldEncPos) {
-        setpoint += 10;
+        setpoint += 5;
       }
       else {
-        setpoint -= 10;      
+        setpoint -= 5;      
       }
       oldEncPos = encoderPos;
     }
