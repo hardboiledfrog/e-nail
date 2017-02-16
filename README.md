@@ -1,7 +1,7 @@
 # e-nail
 This sketch file is a closed loop temperature controller with PID for my e-nail rig using an arduino mega2650 and an inexpensive popular Chinese ZVS induction heating module.
 
-I use an A123 4S1P LiFePo battery pack (about 13v) for power and portability but it should work with any good power supply capable of supplying 12v at 10A-15A. 
+I used an A123 4S1P LiFePo battery pack (about 13v) for the dhgate nail but the Liger needs a battery at least 4x the capacity IMO. It should also work with any good power supply capable of supplying 12v at 10A-15A though. 
 
 It uses a rotary encoder and an OLED display for parameter selections and start / stop control. The temperature can be adjusted in +/- 10 degree increments during a session.
 
@@ -39,8 +39,7 @@ http://www.banggood.com/7Pin-0_96-Inch-IICSPI-Serial-128x64-White-OLED-Display-M
 
 http://www.banggood.com/120Pcs-10cm-Male-To-Female-Jumper-Cable-For-Arduino-p-994320.html
 
-http://www.banggood.com/5V-Relay-1-Channel-Module-One-Channel-Relay-Expansion-Module-Board-p-91800.html
-
+https://www.aliexpress.com/item/High-power-MOS-field-effect-tube-trigger-switch-driver-module-PWM-regulating-electronic-switch-panel/32710883011.html?spm=2114.13010608.0.0.XnEatp
 
 optional:
 
