@@ -87,6 +87,8 @@ unsigned long runTime; // heat cycle run time in msec
 unsigned long windowStartTime;
 unsigned long startTime; // heat cycle start time
 unsigned long endTime; // heat cycle end time
+unsigned long atSetpointTime; // setpoint achieved
+boolean atSetpoint = false;
 boolean heating = false; // heat cycle running
 
 void setup() {
@@ -222,8 +224,12 @@ unsigned long now = millis();
       stopCycle();
       return;
     }
-    if (insert && now - startTime > 270000L && now - startTime < 271000L) {
-     setpoint = EEPROM.readDouble(eepSp);
+    if (!atSetpoint && tc >= setpoint) {
+      atSetpoint = true;
+      atSetpointTime = now;
+    }
+    else if (insert && now - atSetpointTime > 180000L && now - atSetpointTime < 181000L) { // heat soak insert for 3 min
+     setpoint = EEPROM.readDouble(eepSp); // reduce setpoint to desired value
     }
     if(encoderPos != oldEncPos) { // adjust setpoint during run, +/- 5 degrees per detent 
       if(encoderPos > oldEncPos) {
@@ -233,8 +239,8 @@ unsigned long now = millis();
         setpoint -= 5;      
       }
       oldEncPos = encoderPos;
-    }
     setpoint = constrain(setpoint, 0, 700); // hard limits for setpoint
+    }
     now = micros();
     if ((now - lastTimePID) >= period) { // compute PID at interval set by period
      lastTimePID = now;
@@ -253,6 +259,7 @@ unsigned long now = millis();
 void stopCycle() {
      heating = false; 
      endTime = millis();
+     atSetpoint = false;
      encoderPos = 0; // reorientate the menu index - optional as we have overflow check code elsewhere
      oldEncPos = 10; // enables 1st "if" in rotaryMenu()
      mode = 0; // go back to top level of menu
@@ -272,11 +279,11 @@ void displayRunData() {
 unsigned long now = millis();
      display.clearDisplay();
      display.setCursor(18,0);
-     if (insert && now - startTime > 300000L) { // wait until SiC insert reaches temp
+     if (atSetpoint && insert && now - atSetpointTime > 210000L) { // wait until SiC insert reaches temp
       display.setTextColor(BLACK, WHITE); // display in black on white
       display.print("*** dab it! ***");
       display.setTextColor(WHITE);
-      if (now - startTime < 301500L) { // beep when ready
+      if (now - atSetpointTime < 211500L) { // beep when ready
        tone(spkr, 784, 200);
       }
      }
@@ -328,7 +335,6 @@ const byte modeMax = 8; // This is the number of submenus/settings you want
      display.setCursor(35,0);
      switch(encoderPos) { 
       case 0: { // menu top, ready to run 
-        display.print("ready");
         break;
       }
       case 1: {
@@ -395,10 +401,26 @@ const byte modeMax = 8; // This is the number of submenus/settings you want
         display.setTextSize(2);
         display.setCursor(35,0);
         display.print("ready");
+        unsigned long lastRun = (millis() - endTime) / 1000UL;
+        int seconds = lastRun % 60UL;
+        int minutes = lastRun / 60UL;       
+        if (minutes < 10) { //display minutes:seconds from last run
+          display.setCursor(46,22);
+        }
+        else if (minutes < 100) {
+          display.setCursor(35,22);
+        }
+        else {
+          display.setCursor(24,22);
+        }
+        display.print(minutes);
+        display.print(":");
+        if (seconds < 10) display.print("0");
+        display.print(seconds);
         display.setTextSize(1);
-        display.setCursor(90,40);
+        display.setCursor(86,48);
         display.print("*F");
-        display.setCursor(50,40);
+        display.setCursor(46,48);
         display.setTextSize(2);
         display.print(int(tc)); // display temp when not running
         display.setTextSize(1);
