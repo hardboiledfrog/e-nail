@@ -62,8 +62,8 @@ double tc; // thermocouple PID input
 double error; // = tc - setpoint 
 double heater; // PID output
 double Kp; // (60) PID tuning parameters 
-double Ki; // (5)
-double Kd; // (1)
+double Ki; // (10)
+double Kd; // (5)
 double N; // (100) derivative filter constant D(s)=s/(1+s/N)
 //a good rule is: N>10*Kd/Kp (also avoid too large values)
 unsigned int period = 50U; //50ms => 20Hz cycle frequency
@@ -83,7 +83,7 @@ unsigned int eepKd = 18; // eeprom storage location for PID tuning parameter
 unsigned int eepN = 22; // eeprom storage location for PID tuning parameter
 unsigned int eepIn = 26; // eeprom storage location for insert flag
 unsigned int dabCount; // number of run cycles
-unsigned long runTime; // heat cycle run time in msec
+unsigned long runTime = 510000; // heat cycle run time in msec
 unsigned long windowStartTime;
 unsigned long startTime; // heat cycle start time
 unsigned long endTime; // heat cycle end time
@@ -95,31 +95,27 @@ void setup() {
   pinMode(relay, OUTPUT); // heater control relay
   digitalWrite(relay, LOW); // init to off
   Serial.begin(230400);
-  // uncomment these lines to store initial values to new chip
-  // be sure to comment them out when done or you'll burn out eeprom cells
-  //EEPROM.updateDouble(eepSp, setpoint); // clear or set stored value
-  //EEPROM.updateLong(eepRt, runTime); // clear or set stored value
   insert = EEPROM.readByte(eepIn);
   dabCount = EEPROM.readInt(eepDc);
   runTime = EEPROM.readLong(eepRut);
   setpoint = EEPROM.readDouble(eepSp);
-  if (isnan(setpoint)) { // if EEPROM value bad load defaults
-    setpoint = 530;
+  if (isnan(setpoint) || setpoint == 0) { // if EEPROM value bad load defaults
+    setpoint = 500;
   }
   Kp = EEPROM.readDouble(eepKp);
-  if (isnan(Kp)) {
+  if (isnan(Kp) || Kp == 0) {
     Kp = 60;
   }
   Ki = EEPROM.readDouble(eepKi);
-  if (isnan(Ki)) {
-    Ki = 5;
+  if (isnan(Ki) || Ki == 0) {
+    Ki = 10;
   }
   Kd = EEPROM.readDouble(eepKd);
-  if (isnan(Kd)) {
-    Kd = 1;
+  if (isnan(Kd) || Kd == 0) {
+    Kd = 5;
   }
   N = EEPROM.readDouble(eepN);
-  if (isnan(N)) {
+  if (isnan(N) || N == 0) {
     N = 100;
   }
   myPID.SetTunings(Kp, Ki, Kd, N); //sets PID tuning parameters;
@@ -228,7 +224,7 @@ unsigned long now = millis();
       atSetpoint = true;
       atSetpointTime = now;
     }
-    else if (insert && now - atSetpointTime > 180000L && now - atSetpointTime < 181000L) { // heat soak insert for 3 min
+    else if (insert && now - atSetpointTime > 300000L && now - atSetpointTime < 301000L) { // heat soak insert for 6 min
      setpoint = EEPROM.readDouble(eepSp); // reduce setpoint to desired value
     }
     if(encoderPos != oldEncPos) { // adjust setpoint during run, +/- 5 degrees per detent 
@@ -239,7 +235,7 @@ unsigned long now = millis();
         setpoint -= 5;      
       }
       oldEncPos = encoderPos;
-    setpoint = constrain(setpoint, 0, 700); // hard limits for setpoint
+      setpoint = constrain(setpoint, 0, 650); // hard limits for setpoint
     }
     now = micros();
     if ((now - lastTimePID) >= period) { // compute PID at interval set by period
@@ -279,11 +275,11 @@ void displayRunData() {
 unsigned long now = millis();
      display.clearDisplay();
      display.setCursor(18,0);
-     if (atSetpoint && insert && now - atSetpointTime > 210000L) { // wait until SiC insert reaches temp
+     if (atSetpoint && insert && now - atSetpointTime > 360000L) { // wait until SiC insert reaches temp
       display.setTextColor(BLACK, WHITE); // display in black on white
       display.print("*** dab it! ***");
       display.setTextColor(WHITE);
-      if (now - atSetpointTime < 211500L) { // beep when ready
+      if (now - atSetpointTime < 361500L) { // beep when ready
        tone(spkr, 784, 200);
       }
      }
@@ -311,7 +307,7 @@ unsigned long now = millis();
 }
 
 void rotaryMenu() { 
-const byte modeMax = 8; // This is the number of submenus/settings you want
+const byte modeMax = 8 * 5; // This is the number of submenus/settings you want * 5
 // top menu section, check for knob turn, displays mode selections
   if(oldEncPos != encoderPos) {
     if (mode == 3) { // limit encoderPos to 0 or 1 for insert enable
@@ -321,10 +317,12 @@ const byte modeMax = 8; // This is the number of submenus/settings you want
       else if (encoderPos > 1) {
         encoderPos = 0;
       }
+      oldEncPos = encoderPos;
     }
     display.setTextSize(2); // the encoder position prints but is immediately cleared if mode = 0
     display.setCursor(50,32);
     display.print(oldEncPos); //clears previous setting on display
+    oldEncPos = encoderPos;
     display.setCursor(50,32);
     display.setTextColor(BLACK, WHITE); // display new setting in black on white
     display.print(encoderPos); // displays new setting when encoder rotated 
@@ -333,7 +331,7 @@ const byte modeMax = 8; // This is the number of submenus/settings you want
      int value;
      display.clearDisplay();
      display.setCursor(35,0);
-     switch(encoderPos) { 
+     switch(encoderPos / 5) { 
       case 0: { // menu top, ready to run 
         break;
       }
@@ -346,7 +344,7 @@ const byte modeMax = 8; // This is the number of submenus/settings you want
       case 2: {
         display.println(" set");
         display.print("    time");
-        value = EEPROM.readLong(eepRut) / 1000; // display current value
+        value = EEPROM.readLong(eepRut) / 1000L; // display current value
         break;
       }
       case 3: {
@@ -380,7 +378,7 @@ const byte modeMax = 8; // This is the number of submenus/settings you want
         break;
       }
       case 8: {
-        display.println(" set");
+        display.println("clear");
         display.print("  counter");
         value = EEPROM.readInt(eepDc); // display current value
         break;
@@ -391,7 +389,6 @@ const byte modeMax = 8; // This is the number of submenus/settings you want
       display.print(value); // display currently set value
      }
     }
-    oldEncPos = encoderPos;
   }
 
   //Main menu section, switches mode if knob pressed
@@ -432,7 +429,7 @@ const byte modeMax = 8; // This is the number of submenus/settings you want
         encoderPos = 0; // check we haven't gone out of bounds above modeMax and correct if we have
       }
       if (button.onPressed()){ 
-        mode = encoderPos; // set the mode to the current value of encoder if knob pressed
+        mode = encoderPos / 5; // set the mode to the current value of encoder if knob pressed
         switch (mode) {
           case 0: { // start a heating cycle
             startCycle();
@@ -446,7 +443,7 @@ const byte modeMax = 8; // This is the number of submenus/settings you want
             encoderPos = runTime / 1000; // start adjusting cycle run time from last set point
             break;
            }
-          case 3: { // enable / disable upTemp function
+          case 3: { // enable / disable insert function
             encoderPos = insert; // display current value
             break;
           }
@@ -467,7 +464,7 @@ const byte modeMax = 8; // This is the number of submenus/settings you want
             break;
           }
           case 8: { // change dab counter total
-            encoderPos = dabCount; // start adjusting dab count from last set point
+            encoderPos = 0; // clear dab count
             break;
           }
         }
@@ -542,7 +539,7 @@ void intPinA(){
   noInterrupts(); //stop interrupts happening before we read pin values
   byte reading = PINE & 0x30; // read all eight pin values then strip away all but pinA and pinB's values
   if(reading == B00110000 && aFlag) { //check that we have both pins at detent (HIGH) and that we are expecting detent on this pin's rising edge
-    encoderPos --; //decrement the encoder's position count
+    encoderPos -= 5; //decrement the encoder's position count
     bFlag = 0; //reset flags for the next turn
     aFlag = 0; //reset flags for the next turn
   }
@@ -555,7 +552,7 @@ void intPinB(){
   noInterrupts(); //stop interrupts happening before we read pin values
   byte reading = PINE & 0x30; //read all eight pin values then strip away all but pinA and pinB's values
   if (reading == B00110000 && bFlag) { //check that we have both pins at detent (HIGH) and that we are expecting detent on this pin's rising edge
-    encoderPos ++; //increment the encoder's position count
+    encoderPos += 5; //increment the encoder's position count
     bFlag = 0; //reset flags for the next turn
     aFlag = 0; //reset flags for the next turn
   }
